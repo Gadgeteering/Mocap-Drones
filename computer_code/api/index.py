@@ -17,6 +17,7 @@ import threading
 from ruckig import InputParameter, OutputParameter, Result, Ruckig
 from flask_cors import CORS
 import json
+from scipy.linalg import svd
 
 def serial_ports():
     """ https://stackoverflow.com/questions/12090503/listing-available-com-ports-with-python
@@ -34,7 +35,7 @@ def serial_ports():
         # this excludes your current terminal "/dev/tty"
         ports = glob.glob('/dev/tty[A-Za-z]*')
     elif sys.platform.startswith('darwin'):
-        ports = glob.glob('/dev/cu.usbserial-*')
+        ports = glob.glob('/dev/cu.usb*')
     else:
         raise EnvironmentError('Unsupported platform')
 
@@ -51,11 +52,18 @@ def serial_ports():
 serialLock = threading.Lock()
 
 
-
-
 list = serial_ports()
-ser = serial.Serial(list[0], 1000000, write_timeout=1, )
 print(list)
+if (len(list)>0):
+    ser = serial.Serial(list[0], 1000000, write_timeout=1, )
+else:
+    list = glob.glob('/dev/cu*')
+    if (len(list)>0):
+        ser = serial.Serial(list[0], 1000000, write_timeout=1, )
+    else:
+        print (ports)
+        exit()
+
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins='*')
@@ -90,7 +98,7 @@ def camera_stream():
                 time.sleep(last_run_time - time_now + loop_interval)
             last_run_time = time.time()
             frames = cameras.get_frames()
-            jpeg_frame = cv.imencode('.jpg', frames)[1].tostring()
+            jpeg_frame = cv.imencode('.jpg', frames)[1].tobytes()
 
             yield (b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n' + jpeg_frame + b'\r\n')
@@ -263,6 +271,80 @@ def capture_points(data):
     elif (start_or_stop == "stop"):
         cameras.stop_capturing_points()
 
+
+def fundamental_from_projections(P1, P2):
+    X = [np.vstack((P1[1, :], P1[2, :])),
+         np.vstack((P1[2, :], P1[0, :])),
+         np.vstack((P1[0, :], P1[1, :]))]
+
+    Y = [np.vstack((P2[1, :], P2[2, :])),
+         np.vstack((P2[2, :], P2[0, :])),
+         np.vstack((P2[0, :], P2[1, :]))]
+
+    F = np.zeros((3, 3), dtype=P1.dtype)
+
+    for i in range(3):
+        for j in range(3):
+            XY = np.vstack((X[j], Y[i]))
+            F[i, j] = np.linalg.det(XY)
+
+    return F
+
+def essential_from_fundamental_impl(F, K1, K2, E):
+    # Implementation of essentialFromFundamental
+    E[:, :] = np.dot(np.dot(K2.T, F), K1)
+
+def essential_from_fundamental(F, K1, K2):
+    # Ensure input matrices are NumPy arrays
+    F_np = np.array(F)
+    K1_np = np.array(K1)
+    K2_np = np.array(K2)
+
+    # Check matrix dimensions
+    if F_np.shape != (3, 3) or K1_np.shape != (3, 3) or K2_np.shape != (3, 3):
+        print("F{} K1{} K2{}".format(F_np.shape),(K1_np.shape),(K2_np.shape))
+        raise ValueError("Invalid matrix dimensions.")
+
+    # Create an empty matrix for E
+    E = np.zeros((3, 3), dtype=F_np.dtype)
+
+    # Call the appropriate function based on the data type of F
+    if F_np.dtype == np.float32:
+        essential_from_fundamental_impl(F_np, K1_np, K2_np, E)
+    elif F_np.dtype == np.float64:
+        essential_from_fundamental_impl(F_np, K1_np, K2_np, E)
+    else:
+        raise ValueError("Unsupported data type for matrices.")
+
+    return E
+
+  
+def motion_from_essential(E):
+    U, d, Vt = svd(E)
+
+    # Ensure proper shapes for matrices
+    U = U[:, :3]
+    Vt = Vt[:3, :]
+    
+    # Last column of U is undetermined since d = (a a 0)
+    if np.linalg.det(U) < 0:
+        U[:, 2] *= -1
+    
+    # Last row of Vt is undetermined since d = (a a 0)
+    if np.linalg.det(Vt) < 0:
+        Vt[2, :] *= -1
+    
+    W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+
+    U_W_Vt = U @ W @ Vt
+    U_Wt_Vt = U @ W.T @ Vt
+
+    Rs = [U_W_Vt, U_W_Vt, U_Wt_Vt, U_Wt_Vt]
+
+    ts = [U[:, 2], -U[:, 2], U[:, 2], -U[:, 2]]
+
+    return Rs, ts
+
 @socketio.on("calculate-camera-pose")
 def calculate_camera_pose(data):
     cameras = Cameras.instance()
@@ -281,9 +363,11 @@ def calculate_camera_pose(data):
         camera2_image_points = np.take(camera2_image_points, not_none_indicies, axis=0).astype(np.float32)
 
         F, _ = cv.findFundamentalMat(camera1_image_points, camera2_image_points, cv.FM_RANSAC, 1, 0.99999)
-        E = cv.sfm.essentialFromFundamental(F, cameras.get_camera_params(0)["intrinsic_matrix"], cameras.get_camera_params(1)["intrinsic_matrix"])
-        possible_Rs, possible_ts = cv.sfm.motionFromEssential(E)
-
+        #E = cv.sfm.essentialFromFundamental(F, cameras.get_camera_params(0)["intrinsic_matrix"], cameras.get_camera_params(1)["intrinsic_matrix"])
+        E = essential_from_fundamental(F, cameras.get_camera_params(0)["intrinsic_matrix"], cameras.get_camera_params(1)["intrinsic_matrix"])
+        #possible_Rs, possible_ts = cv.sfm.motionFromEssential(E)
+        possible_Rs, possible_ts = motion_from_essential(E)
+        
         R = None
         t = None
         max_points_infront_of_camera = 0

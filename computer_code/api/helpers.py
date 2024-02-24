@@ -335,6 +335,23 @@ def triangulate_points(image_points, camera_poses):
     
     return np.array(object_points)
 
+def fundamental_from_projections(P1, P2):
+    X = [np.vstack((P1[1, :], P1[2, :])),
+         np.vstack((P1[2, :], P1[0, :])),
+         np.vstack((P1[0, :], P1[1, :]))]
+
+    Y = [np.vstack((P2[1, :], P2[2, :])),
+         np.vstack((P2[2, :], P2[0, :])),
+         np.vstack((P2[0, :], P2[1, :]))]
+
+    F = np.zeros((3, 3), dtype=P1.dtype)
+
+    for i in range(3):
+        for j in range(3):
+            XY = np.vstack((X[j], Y[i]))
+            F[i, j] = np.linalg.det(XY)
+
+    return F
 
 def find_point_correspondance_and_object_points(image_points, camera_poses, frames):
     cameras = Cameras.instance()
@@ -355,11 +372,12 @@ def find_point_correspondance_and_object_points(image_points, camera_poses, fram
         Ps.append(P)
 
     root_image_points = [{"camera": 0, "point": point} for point in image_points[0]]
-
     for i in range(1, len(camera_poses)):
         epipolar_lines = []
         for root_image_point in root_image_points:
-            F = cv.sfm.fundamentalFromProjections(Ps[root_image_point["camera"]], Ps[i])
+            #F = cv.sfm.fundamentalFromProjections(Ps[root_image_point["camera"]], Ps[i])
+           
+            F = fundamental_from_projections(Ps[root_image_point["camera"]], Ps[i])
             line = cv.computeCorrespondEpilines(np.array([root_image_point["point"]], dtype=np.float32), 1, F)
             epipolar_lines.append(line[0,0].tolist())
             frames[i] = drawlines(frames[i], line[0])
