@@ -2,6 +2,12 @@
 
 ### A general purpose motion capture system built from the ground up, used to autonomously fly multiple drones indoors
 
+Branch adapted to use the ESP-Drone 
+
+[ESP Drone documentation](https://docs.espressif.com/projects/espressif-esp-drone/en/latest/gettingstarted.html#basic-flight-control)
+
+
+
 ## Dependencies
 Install the pseyepy python library: [https://github.com/bensondaled/pseyepy](https://github.com/bensondaled/pseyepy)
 
