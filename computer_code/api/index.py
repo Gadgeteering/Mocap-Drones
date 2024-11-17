@@ -31,7 +31,7 @@ num_objects = 2
 
 serialLock = threading.Lock()
 
-serialSelected = False
+serial_init = False
 
 ser = None
 
@@ -72,13 +72,17 @@ def serial_ports():
 @socketio.on("set-serial-port")
 def serial_port(data):
     global ser
+    global serial_init
     port = data["currentPort"]
     print(port)
     ser = serial.Serial(port, 1000000, write_timeout=1, )
-    serialSelected = True
+    serial_init = True
 
 @app.route("/api/camera-stream")
 def camera_stream():
+    global serial_init
+    if not serial_init:
+        return
     cameras = Cameras.instance()
     cameras.set_socketio(socketio)
 
