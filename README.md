@@ -6,6 +6,7 @@
 
 [Elektor magazine article](https://www.elektormagazine.com/labs/make-a-tiny-arduino-drone-with-fpv-camera) with Bill Of Materials and linkes to [video](https://www.youtube.com/watch?v=Sa6EslOHsI0&t=668s)
 
+[Electronoobs Version](https://electronoobs.com/eng_arduino_tut117_code1.php)
 
 ## Dependencies
 Install the pseyepy python library: [https://github.com/bensondaled/pseyepy](https://github.com/bensondaled/pseyepy)
