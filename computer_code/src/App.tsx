@@ -97,6 +97,7 @@ export default function App() {
 
   const selectPort: FormEventHandler = (e) => {
     e.preventDefault()
+    setPortSelected(true)
     socket.emit("set-serial-port", {
       currentPort
     })
@@ -395,18 +396,8 @@ export default function App() {
                 <h4>Serial Port</h4>
               </Col>
               <Col>
-               <Form.Label>Port Selected: {currentPort}</Form.Label>
-              <Form.Select value={currentPort} onChange={(e) => setCurrentPort(e.target.value)} size='sm'>
-              <option value="" disabled>
-              Select a port
-              </option>
-              {portList.map((port, index) => (
-              <option key={index} value={port}>
-              {port}
-              </option>
-              ))}
-              </Form.Select>
-                <Form onClick={refreshPortList} className='ps-3'>
+              <Form.Label>Port Selected: {currentPort}</Form.Label>
+              <Form onClick={refreshPortList} className='ps-3'>
                   <Button
                   size='sm'
                   disabled={cameraStreamRunning}
@@ -415,14 +406,19 @@ export default function App() {
                 >
                   {"Refresh"}
                 </Button>
-                
-              <Col></Col>
                 </Form>
+              <Form.Select value={currentPort} onChange={(e) => setCurrentPort(e.target.value)} size='sm'>
+              <option value="" disabled>
+              -- Select a Port --
+              </option>
+              {portList.map((port, index) => (
+              <option key={index} value={port}>
+              {port}
+              </option>
+              ))}
+              </Form.Select>
                 <Form onClick={selectPort} className='ps-3'>
-                  <Form.Group className="mb-1">
-                    <Form.Label>Connected: {portSelected}</Form.Label>
-                  </Form.Group>
-                  <Button
+                <Button
                   size='sm'
                   disabled={cameraStreamRunning}
                   variant={ "outline-primary"}
@@ -431,7 +427,8 @@ export default function App() {
                     selectPort(currentPort)
                   }}
                 >
-                  {"Connect"}
+                  {portSelected ? "Connected" : "Connect"}
+                  
                 </Button>
                 </Form>
                 

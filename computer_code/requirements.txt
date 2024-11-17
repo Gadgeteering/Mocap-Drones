@@ -1,0 +1,10 @@
+opencv-python 
+numpy
+pyserial  
+glob2  
+flask-cors   
+ruckig    
+scipy 
+Pillow
+h5py
+flask_socketio

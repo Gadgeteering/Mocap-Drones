@@ -57,6 +57,7 @@ def serial_ports():
         raise EnvironmentError('Unsupported platform')
     
     list = []
+    list.append("Dummy") #OnChange does not work with one in the list
     for port in ports:
         try:
             s = serial.Serial(port)
@@ -64,20 +65,16 @@ def serial_ports():
             list.append(port)
         except (OSError, serial.SerialException):
             pass
-
+    
+        
     socketio.emit("serial_port_list", {"serial_port_list": list})
 
 @socketio.on("set-serial-port")
 def serial_port(data):
+    global ser
     port = data["currentPort"]
     print(port)
-    print(type(port))
-    ser = serial.Serial(port)
-    droneIndex = 0
-    serial_data = {
-            "armed": [droneIndex],
-        }
-    ser.write(f"{json.dumps(serial_data)}".encode('utf-8'))
+    ser = serial.Serial(port, 1000000, write_timeout=1, )
     serialSelected = True
 
 @app.route("/api/camera-stream")
