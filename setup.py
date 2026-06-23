@@ -6,6 +6,8 @@ import os, sys
 import warnings
 import subprocess
 import shutil
+import platform
+
 
 ### install libusb
 # keeping this slightly hacky approach to guarantee that the correct libusb is used and is easily findable

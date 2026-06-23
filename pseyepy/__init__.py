@@ -1,32 +1,45 @@
 import os
 import sys
 
-# On Windows, register any packaged DLL directory so the OS loader can find
-# third-party DLLs (libusb). Prefer `os.add_dll_directory` (Python 3.8+).
-if sys.platform == 'win32':
-	try:
-		pkg_dir = os.path.dirname(__file__)
+# Windows DLL handling
+if sys.platform == "win32":
+    try:
+        pkg_dir = os.path.dirname(__file__)
 
-		# Search locations in priority order:
-		# 1. _libs/ - installed package location
-		# 2. ext/win/lib/ - development/build location
-		dll_dirs = [
-			os.path.join(pkg_dir, '_libs'),
-			os.path.join(pkg_dir, 'ext', 'win', 'lib')
-		]
+        dll_dirs = [
+            os.path.join(pkg_dir, "_libs"),
+            os.path.join(pkg_dir, "ext", "win", "lib"),
+        ]
 
-		for dll_dir in dll_dirs:
-			if os.path.isdir(dll_dir):
-				try:
-					os.add_dll_directory(dll_dir)
-				except Exception:
-					# Fallback for older Pythons: prepend to PATH
-					os.environ['PATH'] = dll_dir + os.pathsep + os.environ.get('PATH', '')
-				# Stop after registering the first valid directory
-				break
-	except Exception:
-		# Don't fail import just because DLL path setup failed
-		pass
+        for dll_dir in dll_dirs:
+            if os.path.isdir(dll_dir):
+                try:
+                    os.add_dll_directory(dll_dir)
+                except AttributeError:
+                    os.environ["PATH"] = (
+                        dll_dir + os.pathsep + os.environ.get("PATH", "")
+                    )
+                break
+    except Exception:
+        pass
+
+# Linux/macOS/Raspberry Pi shared library handling
+elif sys.platform.startswith(("linux", "darwin")):
+    pkg_dir = os.path.dirname(__file__)
+
+    lib_dirs = [
+        os.path.join(pkg_dir, "_libs"),
+        os.path.join(pkg_dir, "ext", "lib"),
+    ]
+
+    for lib_dir in lib_dirs:
+        if os.path.isdir(lib_dir):
+            os.environ["LD_LIBRARY_PATH"] = (
+                lib_dir + os.pathsep + os.environ.get("LD_LIBRARY_PATH", "")
+            )
+            os.environ["DYLD_LIBRARY_PATH"] = (
+                lib_dir + os.pathsep + os.environ.get("DYLD_LIBRARY_PATH", "")
+            )
 
 from .cameras import Camera, cam_count
 from .ui import Display
