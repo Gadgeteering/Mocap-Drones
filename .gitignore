@@ -30,6 +30,8 @@ yarn-error.log*
 # vercel
 .vercel
 
+espnow-rclink-tx/EspNowRcLink/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

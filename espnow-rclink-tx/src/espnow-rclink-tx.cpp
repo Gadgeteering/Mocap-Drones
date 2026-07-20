@@ -1,25 +1,20 @@
-#include <esp_now.h>
-#include <esp_wifi.h>
-#include <WiFi.h>
+#include <Arduino.h>
+#include "EspNowRcLink/Transmitter.h"
 #include <ArduinoJson.h>
 #include <PID_v1.h>
 #include <stdint.h>
 #include <EEPROM.h>
-#include "sbus.h"
 
-#define batVoltagePin 34
+
 #define MAX_VEL 100
 #define ROTOR_RADIUS 0.0225
 #define Z_GAIN 0.7
 
-#define DRONE_INDEX 1
+#define DRONE_INDEX 0
 
 #define EEPROM_SIZE 4
 
 unsigned long lastPing;
-
-bfs::SbusTx sbus_tx(&Serial1, 33, 32, true, false);
-bfs::SbusData data;
 
 bool armed = false;
 unsigned long timeArmed = 0;
@@ -61,19 +56,28 @@ PID zVelPID(&zVel, &zVelOutput, &zVelSetpoint, zVelKp, zVelKi, zVelKd, DIRECT);
 
 
 unsigned long lastLoopTime = micros();
-unsigned long lastSbusSend = micros();
-float loopFrequency = 2000.0;
-float sbusFrequency = 50.0;
 
-#if DRONE_INDEX == 0
-  uint8_t newMACAddress[] = { 0xC0, 0x4E, 0x30, 0x4B, 0x61, 0x3A };
-#elif DRONE_INDEX == 1
-  uint8_t newMACAddress[] = { 0xC0, 0x4E, 0x30, 0x4B, 0x80, 0x3B };
+float loopFrequency = 2000.0;
+
+#ifdef lolin32
+#define BUILTIN_LED 8
+#elif ESP32-C3-SuperMini
+
+#define BUILTIN_LED 8
 #endif
 
+// uncomment to print some details to console
+#define PRINT_INFO
+
+EspNowRcLink::Transmitter tx;
+
+char buffer[1024];
+int ch[8];
+
 // callback function that will be executed when data is received
-void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const char *incomingData) {
   // Serial.println((char*)incomingData);
+  int len = strlen((char *)incomingData);
   DeserializationError err = deserializeJson(json, (char *)incomingData);
 
   if (err) {
@@ -127,48 +131,16 @@ void resetPid(PID &pid, double min, double max) {
   pid.SetOutputLimits(min, max);
 }
 
-void setup() {
-  // Initialize Serial Monitor
+
+
+void setup()
+{
+  pinMode(BUILTIN_LED, OUTPUT);
   Serial.begin(115200);
-
-  sbus_tx.Begin();
-  data.failsafe = false;
-  data.ch17 = true;
-  data.ch18 = true;
-  data.lost_frame = false;
-  for (int i = 500; i > 172; i--) {
-    for (int j = 0; j < 16; j++) {
-      data.ch[j] = i;
-    }
-    Serial.println(i);
-    sbus_tx.data(data);
-    sbus_tx.Write();
-  }
-
-  // Set device as a Wi-Fi Station
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_set_mac(WIFI_IF_STA, &newMACAddress[0]);
-  esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  //esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
-  esp_wifi_start();
-
-  // Init ESP-NOW
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
-  esp_wifi_config_espnow_rate(WIFI_IF_STA, WIFI_PHY_RATE_24M);
-  esp_wifi_start();
-
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
-  esp_now_register_recv_cb(OnDataRecv);
-
-
+  #ifdef PRINT_INFO
+  Serial.println("EspNowRcLink Transmitter");
+  #endif
+  tx.begin(true);
   xPosPID.SetMode(AUTOMATIC);
   yPosPID.SetMode(AUTOMATIC);
   zPosPID.SetMode(AUTOMATIC);
@@ -203,21 +175,35 @@ void setup() {
 
   lastPing = micros();
   lastLoopTime = micros();
-  lastSbusSend = micros();
+
 }
 
-void loop() {
-  while (micros() - lastLoopTime < 1e6 / loopFrequency) { yield(); }
-  lastLoopTime = micros();
+void loop()
+{
+  vTaskDelay(1);
+  uint32_t now = micros();
+  static int v = 0;
+  static uint32_t delta = 0;
+  static bool ledState = 0;
+  static bool connected = false;
+  static uint32_t lastChannel = 32;
+  int availableBytes = Serial.available();
 
+  if (availableBytes) {
+    int droneIndex = Serial.read() - '0';
+    Serial.readBytes(buffer, availableBytes-1);
+    buffer[availableBytes-1] = '\0';
+    Serial.printf("\n drone index %d: ", droneIndex);
+    Serial.print(buffer);
+    OnDataRecv(buffer);
+  }
   if (micros() - lastPing > 2e6) {
     armed = false;
   }
-
   if (armed) {
-    data.ch[4] = 1800;
+    ch[4] = 1800;
   } else {
-    data.ch[4] = 172;
+    ch[4] = 172;
     resetPid(xPosPID, -MAX_VEL, MAX_VEL);
     resetPid(yPosPID, -MAX_VEL, MAX_VEL);
     resetPid(zPosPID, -MAX_VEL, MAX_VEL);
@@ -235,6 +221,7 @@ void loop() {
   xVelPID.Compute();
   yVelPID.Compute();
   zVelPID.Compute();
+
   int xPWM = 992 + (xVelOutput * 811) + xTrim;
   int yPWM = 992 + (yVelOutput * 811) + yTrim;
   int zPWM = 992 + (Z_GAIN * zVelOutput * 811) + zTrim;
@@ -242,19 +229,55 @@ void loop() {
   double groundEffectMultiplier = 1 - groundEffectCoef*pow(((2*ROTOR_RADIUS) / (4*(zPos-groundEffectOffset))), 2);
   zPWM *= max(0., groundEffectMultiplier);
   zPWM = armed && millis() - timeArmed > 100 ? zPWM : 172;
-  data.ch[0] = -yPWM;
-  data.ch[1] = xPWM;
-  data.ch[2] = zPWM;
-  data.ch[3] = yawPWM;
+  ch[0] = -yPWM;
+  ch[1] = xPWM;
+  ch[2] = zPWM;
+  ch[3] = yawPWM;
 
-  if (micros() - lastSbusSend > 1e6 / sbusFrequency) {
-    lastSbusSend = micros();
-    // Serial.printf("PWM x: %d, y: %d, z: %d, yaw: %d\nPos x: %f, y: %f, z: %f, yaw: %f\n", xPWM, yPWM, zPWM, yawPWM, xVel, yVel, zPos, yawPos);
-    // Serial.printf("Setpoint x: %f, y: %f, z: %f\n", xVelSetpoint, yVelSetpoint, zVelSetpoint);
-    // Serial.printf("Pos x: %f, y: %f, z: %f\n", xVel, yVel, zPos);
-    //Serial.printf("Output x: %f, y: %f, z: %f\n", xVelOutput, yVelOutput, zVelOutput);
 
-    sbus_tx.data(data);
-    sbus_tx.Write();
+    for(size_t c = 0; c < 8; c++)
+    {
+      const int16_t val = ch[c];
+      tx.setChannel(c, val);
+      if(c == 2) v = val;
+    }
+    tx.commit();
+    tx.update();
+static uint32_t connectedNext = now + 50000;
+ if(now >= connectedNext){
+  if(WiFi.channel() == lastChannel)
+    {
+      connected = true;
+      digitalWrite(BUILTIN_LED, 0);
+      #ifdef PRINT_INFO
+      Serial.printf("Connected on channel %d\n", WiFi.channel());
+      #endif
+    } 
+  else
+    {
+    
+    lastChannel = WiFi.channel();
+    connected = false;
+    digitalWrite(BUILTIN_LED, ledState);
+    ledState = !ledState; 
   }
+  connectedNext = now + 50000;
 }
+   
+#ifdef PRINT_INFO
+  static uint32_t printNext = now + 500000;
+  if(now >= printNext)
+  {
+    Serial.printf("V: %d, P: %d, D: %d, C: %d, S: %d\n", v, ch[2], delta / 100, WiFi.channel(),WiFi.localIP());
+    Serial.printf("PWM x: %d, y: %d, z: %d, yaw: %d\nPos x: %f, y: %f, z: %f, yaw: %f\n", xPWM, yPWM, zPWM, yawPWM, xVel, yVel, zPos, yawPos);
+    Serial.printf("Setpoint x: %f, y: %f, z: %f\n", xVelSetpoint, yVelSetpoint, zVelSetpoint);
+    Serial.printf("Pos x: %f, y: %f, z: %f\n", xVel, yVel, zPos);
+    Serial.printf("Output x: %f, y: %f, z: %f\n", xVelOutput, yVelOutput, zVelOutput);
+    printNext = now + 500000;
+  }
+#else
+  (void)v;
+  (void)delta;
+#endif
+}
+
