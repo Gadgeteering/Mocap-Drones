@@ -4,10 +4,11 @@
 
 Branch adapted to use the ESP-Drone 
 
-[ESP Drone documentation](https://docs.espressif.com/projects/espressif-esp-drone/en/latest/gettingstarted.html#basic-flight-control)
+[ESP-Fly documentation](https://www.elektormagazine.com/labs/esp-fly-the-smallest-esp32-drone-you-can-build)
 
-## Dependencies  for ESP Drone
-pip3 install cfclient
+Use the ESP-Fly with a EspNow RCLink Transmitter
+
+
 
 ## Dependencies
 Install the pseyepy python library: [https://github.com/bensondaled/pseyepy](https://github.com/bensondaled/pseyepy)
