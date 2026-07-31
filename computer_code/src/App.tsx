@@ -21,11 +21,14 @@ const LAND_Z_HEIGHT = 0.075
 const NUM_DRONES = 2
 
 export default function App() {
-  const [cameraStreamRunning, setCameraStreamRunning] = useState(false);
+  const [portSelected, setPortSelected] = useState(false);
+  const [portList, setPortList] = useState(['Click Refresh']);
+  const [ports, setPorts] = useState(["Please set port"]);
+  const [currentPort, setCurrentPort] = useState(["Please select Com Port"]);
 
+  const [cameraStreamRunning, setCameraStreamRunning] = useState(false);
   const [exposure, setExposure] = useState(100);
   const [gain, setGain] = useState(0);
-
   const [capturingPointsForPose, setCapturingPointsForPose] = useState(false);
   const [capturedPointsForPose, setCapturedPointsForPose] = useState("");
 
@@ -40,6 +43,7 @@ export default function App() {
   const [objectPointCount, setObjectPointCount] = useState(0);
 
   const [fps, setFps] = useState(0);
+ 
 
   const [cameraPoses, setCameraPoses] = useState<Array<object>>([{ "R": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "t": [0, 0, 0] }, { "R": [[-0.0008290000610233772, -0.7947131755287576, 0.6069845808584402], [0.7624444396180684, 0.3922492478955913, 0.5146056781855716], [-0.6470531579819294, 0.46321862674804054, 0.6055994671226776]], "t": [-2.6049886186449047, -2.173986915510569, 0.7303458563542193] }, { "R": [[-0.9985541623963866, -0.028079891357569067, -0.045837806036037466], [-0.043210651917521686, -0.08793122558361385, 0.9951888962042462], [-0.03197537054848707, 0.995730696156702, 0.0865907408997996]], "t": [0.8953888630067902, -3.4302652822708373, 3.70967106300893] }, { "R": [[-0.4499864100408215, 0.6855400696798954, -0.5723172578577878], [-0.7145273934510732, 0.10804105689305427, 0.6912146801345055], [0.5356891214002657, 0.7199735709654319, 0.4412201517663212]], "t": [2.50141072072536, -2.313616767292231, 1.8529907514099284] }])
   const [toWorldCoordsMatrix, setToWorldCoordsMatrix] = useState<number[][]>([[0.9941338485260931, 0.0986512964608827, -0.04433748889242502, 0.9938296704767513], [-0.0986512964608827, 0.659022672138982, -0.7456252673517598, 2.593331619023365], [0.04433748889242498, -0.7456252673517594, -0.6648888236128887, 2.9576262456228286], [0, 0, 0, 1]])
@@ -74,6 +78,29 @@ export default function App() {
       setCapturedPointsForPose("")
     }
     socket.emit("capture-points", { startOrStop })
+  }
+  const refreshPortList: FormEventHandler = (e) => {
+    e.preventDefault()
+    socket.emit("refresh-Port-List")
+  }
+
+  useEffect(() => {
+    socket.on("serial_port_list", (data) => {
+      setPortList(data["serial_port_list"])
+      
+    })
+
+    return () => {
+      socket.off("serial_port_list")
+    }
+  })
+
+  const selectPort: FormEventHandler = (e) => {
+    e.preventDefault()
+    setPortSelected(true)
+    socket.emit("set-serial-port", {
+      currentPort
+    })
   }
 
   useEffect(() => {
@@ -272,6 +299,16 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    socket.on("ports", data => {
+      setPorts(data["ports"])
+    })
+
+    return () => {
+      socket.off("ports")
+    }
+  }, [])
+
   const planTrajectory = async (waypoints: object, maxVel: number[], maxAccel: number[], maxJerk: number[], timestep: number) => {
     const location = window.location.hostname;
     const settings = {
@@ -356,7 +393,58 @@ export default function App() {
           <Card className='shadow-sm p-3'>
             <Row>
               <Col xs="auto">
+                <h4>Serial Port</h4>
+              </Col>
+              <Col>
+              <Form.Label>Port Selected: {currentPort}</Form.Label>
+              <Form onClick={refreshPortList} className='ps-3'>
+                  <Button
+                  size='sm'
+                  disabled={cameraStreamRunning}
+                  variant={ "outline-primary"}
+                  className='me-3'
+                >
+                  {"Refresh"}
+                </Button>
+                </Form>
+              <Form.Select value={currentPort} onChange={(e) => setCurrentPort(e.target.value)} size='sm'>
+              <option value="" disabled>
+              -- Select a Port --
+              </option>
+              {portList.map((port, index) => (
+              <option key={index} value={port}>
+              {port}
+              </option>
+              ))}
+              </Form.Select>
+                <Form onClick={selectPort} className='ps-3'>
+                <Button
+                  size='sm'
+                  disabled={cameraStreamRunning}
+                  variant={ "outline-primary"}
+                  className='me-3'
+                  onClick={() => {
+                    selectPort(currentPort)
+                  }}
+                >
+                  {portSelected ? "Connected" : "Connect"}
+                  
+                </Button>
+                </Form>
+                
+              </Col>
+            </Row>
+
+          </Card>
+        </Col>
+      </Row>
+      <Row>
+        <Col>
+          <Card className='shadow-sm p-3'>
+            <Row>
+              <Col xs="auto">
                 <h4>Camera Stream</h4>
+                
               </Col>
               <Col>
                 <Button
