@@ -407,16 +407,26 @@ export default function App() {
                   {"Refresh"}
                 </Button>
                 </Form>
-              <Form.Select value={currentPort} onChange={(e) => setCurrentPort(e.target.value)} size='sm'>
-              <option value="" disabled>
-              -- Select a Port --
-              </option>
-              {portList.map((port, index) => (
-              <option key={index} value={port}>
-              {port}
-              </option>
-              ))}
-              </Form.Select>
+                 <Form.Select
+                    value={currentPort}
+                    onChange={(e) => setCurrentPort(e.target.value)}
+                    size="sm"
+                    >
+                    {portList.length === 0 ? (
+                    <option value="" disabled>
+                    No Serial Ports Found
+                    </option>
+                    ) : (
+                    <>
+                    <option value="">Select Serial Port...</option>
+                    {portList.map((port, index) => (
+                    <option key={index} value={port}>
+                    {port}
+                    </option>
+                    ))}
+                    </>
+                  )}
+                </Form.Select>
                 <Form onClick={selectPort} className='ps-3'>
                 <Button
                   size='sm'

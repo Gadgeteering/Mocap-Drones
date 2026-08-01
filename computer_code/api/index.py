@@ -55,18 +55,14 @@ def serial_ports():
         ports = glob.glob('/dev/cu.usb*')
     else:
         raise EnvironmentError('Unsupported platform')
-    
     list = []
-    list.append("Dummy") #OnChange does not work with one in the list
     for port in ports:
         try:
             s = serial.Serial(port)
             s.close()
             list.append(port)
         except (OSError, serial.SerialException):
-            pass
-    
-        
+            pass 
     socketio.emit("serial_port_list", {"serial_port_list": list})
 
 @socketio.on("set-serial-port")
@@ -77,6 +73,7 @@ def serial_port(data):
     print(port)
     ser = serial.Serial(port, 1000000, write_timeout=1, )
     serial_init = True
+    
 
 @app.route("/api/camera-stream")
 def camera_stream():
@@ -167,9 +164,13 @@ def plan_trajectory(start_pos, end_pos, waypoints, max_vel, max_accel, max_jerk,
 
 @socketio.on("arm-drone")
 def arm_drone(data):
+    global ser
+    if not ser:
+        return
     global cameras_init
     if not cameras_init:
         return
+    
     
     Cameras.instance().drone_armed = data["droneArmed"]
     for droneIndex in range(0, num_objects):
@@ -183,6 +184,9 @@ def arm_drone(data):
 
 @socketio.on("set-drone-pid")
 def arm_drone(data):
+    global ser
+    if not ser:
+        return
     serial_data = {
         "pid": [float(x) for x in data["dronePID"]],
     }
@@ -192,6 +196,9 @@ def arm_drone(data):
 
 @socketio.on("set-drone-setpoint")
 def arm_drone(data):
+    global ser
+    if not ser:
+        return
     serial_data = {
         "setpoint": [float(x) for x in data["droneSetpoint"]],
     }
@@ -201,6 +208,9 @@ def arm_drone(data):
 
 @socketio.on("set-drone-trim")
 def arm_drone(data):
+    global ser
+    if not ser:
+        return
     serial_data = {
         "trim": [int(x) for x in data["droneTrim"]],
     }
