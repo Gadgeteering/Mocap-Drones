@@ -14,17 +14,53 @@ Watch this for information about the project & a demo!
 ## Dependencies
 Install the pseyepy python library: [https://github.com/bensondaled/pseyepy](https://github.com/bensondaled/pseyepy)
 
+Some extra steps for RaspberryPi
+
+sudo apt update
+sudo apt install libusb-1.0-0-dev
+sudo usermod -aG plugdev <username>
+
+You need to carryout these steps on the RaspberryPi to install yarn
+
+Install npm `curl curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash`
+
+
+nvm install --lts
+
+nvm use --lts
+
+npm install -g yarn`
+
+
 This project requires the sfm (structure from motion) OpenCV module, which requires you to compile OpenCV from source[^1]. This is a bit of a pain, but these links should help you get started: [SFM dependencies](https://docs.opencv.org/4.x/db/db8/tutorial_sfm_installation.html) [OpenCV module installation guide](https://github.com/opencv/opencv_contrib/blob/master/README.md)
 
 [^1]: ⚠️ The experimental [`no-cv-sfm`](https://github.com/jyjblrd/Low-Cost-Mocap/tree/no-cv-sfm) branch removes this OpenCV-SFM dependency, however it is *completely* untested. It is recommended to first try use the `main` branch which is tested, however feedback and bug reports on the `no-cv-sfm` branch are greatly appreciated. 
 
 install npm and yarn
 
+install Python Libraries:
+
+python -m venv env
+source env/bin/activate
+
+pip3 install -r ../requirements.txt
+
+If you get a usb permissions error
+
+`sudo nano /etc/udev/rules.d/99-ps3eye.rules`
+add this line:
+`SUBSYSTEM=="usb", ATTR{idVendor}=="1415", ATTR{idProduct}=="2000", MODE="0660", GROUP="plugdev"`
+`sudo usermod -aG plugdev hoggy`
+
+
 ## Runing the code
 
-From the computer_code directory Run `yarn install` to install node dependencies 
+Goto pseyepy and execute source env/bin/activate <source ../pseyepy/env/bin/activate>
+
+From the computer_code directory Run `yarn install` to install node dependencies only required on initial
 
 Then run `yarn run dev` to start the webserver. You will be given a url view the frontend interface.
+
 
 In another terminal window, run `python3 api/index.py` to start the backend server. This is what receives the camera streams and does motion capture computations.
 
